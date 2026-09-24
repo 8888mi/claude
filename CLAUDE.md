@@ -20,4 +20,5 @@ python -m pytest tests -q                                            # синт�
    список артефактов формулировками из таблицы ТЗ. В спорных случаях — «Отправить».
 
 Пороги эвристик — `AnalysisConfig` в `video_analyzer/analyzer.py`. Менять только после
-прогона `calibrate` на примерах из ТЗ (`video_analyzer/tz_examples.json`).
+прогона `calibrate` на примерах из ТЗ (`video_analyzer/tz_examples.json`, поля `expected` — метка ТЗ,
+`final` — итог с визуальной проверкой). Результаты последней калибровки — `docs/calibration_results.md`.

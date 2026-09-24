@@ -46,6 +46,7 @@ class AnalysisConfig:
     blockiness_thr: float = 1.35       # отношение перепадов на границах 8x8 к внутренним
     overlay_persist: float = 0.85      # контур присутствует в >= 85 % кадров
     overlay_min_area_frac: float = 0.0008
+    border_partial_min_s: float = 1.0  # полосы только на отрезке (заставка) — подсказка к визуальной проверке
     scene_cut_thr: float = 0.45        # 1 - корреляция гистограмм между соседними кадрами
     dark_mean: float = 40.0
 
@@ -63,6 +64,7 @@ class Finding:
 TITLES = {
     "short": "Видео короче 2-х секунд",
     "borders": "Рамочки, поля, черные полосы по краям кадра",
+    "borders_partial": "Рамочки/полосы на части ролика (заставка, вставка) — проверить визуально",
     "blurred_fill": "Рамочки/поля: размытая подложка по краям кадра",
     "overexposed": "Пересвеченное видео (более 20% кадра засвечено до белого)",
     "full_blur": "Полный блюр или расфокус всего кадра более 1 секунды",
@@ -84,6 +86,7 @@ VISUAL_CHECKLIST = [
     "Нестандартная геометрия — кадр «обрублен», повёрнут, вставлен в фигуру",
     "Размытый передний план — абстрактные пятна > 20 % кадра, заслоняющие главный объект",
     "Сюжет понятен и описывается словами",
+    "Заставка/логотип канала в начале или конце ролика, водяной знак в углу (часто полупрозрачный)",
     "Признаки генерации нейросетью (плывущие руки/лица/текст, морфинг объектов)",
     "Рамка: при сомнении сверить края кадра на тёмном фоне (мини-проигрыватель)",
 ]
@@ -169,7 +172,12 @@ def check_borders(frames, cfg: AnalysisConfig):
         # рамка стабильна во времени: присутствует почти во всех кадрах
         res[s] = {"median_px": med, "frac_of_side": med / dim, "present_share": present}
     bad = {s: v for s, v in res.items() if v["present_share"] >= 0.9}
-    return res, bad
+    # покадровые флаги «есть полоса хоть с одной стороны» — для заставок с рамкой
+    per_frame = []
+    for k in range(len(frames)):
+        per_frame.append(any(thick[s][k] >= cfg.border_min_frac * (h if s in ("top", "bottom") else w)
+                             for s in sides))
+    return res, bad, per_frame
 
 
 def check_blurred_fill(frames, cfg: AnalysisConfig, borders_bad: dict):
@@ -341,10 +349,17 @@ def analyze_video(path: str, out_dir: str | None = None, cfg: AnalysisConfig | N
                                 {"duration_s": round(meta["duration_s"], 2)}))
 
     # рамки
-    border_stats, border_bad = check_borders(frames, cfg)
+    border_stats, border_bad, border_flags = check_borders(frames, cfg)
     if border_bad:
         findings.append(Finding("borders", TITLES["borders"], True, "high",
                                 {s: round(v["frac_of_side"] * 100, 1) for s, v in border_bad.items()}))
+    else:
+        part = [r for r in _runs(border_flags, [t for t, _ in frames])
+                if r[1] - r[0] >= cfg.border_partial_min_s]
+        if part:
+            # low: вердикт не меняет, но указывает, какой отрезок посмотреть глазами
+            findings.append(Finding("borders_partial", TITLES["borders_partial"], True, "low",
+                                    {"intervals_s": [[round(a, 2), round(b, 2)] for a, b in part]}))
     fill_ratio, fill_bad = check_blurred_fill(frames, cfg, border_bad)
     if fill_bad:
         findings.append(Finding("blurred_fill", TITLES["blurred_fill"], True, "medium",

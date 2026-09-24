@@ -41,7 +41,7 @@ def main():
         return
     from .analyzer import analyze_video  # OpenCV нужен только для анализа
 
-    hit = total = 0
+    hit = hit_final = total = 0
     for ex in EXAMPLES:
         try:
             p = download(ex, d)
@@ -50,13 +50,16 @@ def main():
             print(f"[--] {ex['id']:16} не скачан/не открыт: {e}")
             continue
         got = "BAD" if rep["verdict"] == "BAD" else "OK"
+        final = ex.get("final", ex["expected"])
         total += 1
         hit += got == ex["expected"]
-        found = ", ".join(f["code"] for f in rep["findings"] if f["critical"]) or "-"
-        print(f"[{'OK' if got == ex['expected'] else 'XX'}] {ex['id']:16} ждём {ex['expected']:3} "
-              f"получили {got:3} | авто: {found} | {ex['artifact']}")
-    print(f"\nСовпадений автоматики: {hit}/{total} "
-          "(ошибки на тексте/плёнке/переднем плане ожидаемы — это визуальная часть проверки)")
+        hit_final += got == final
+        found = ", ".join(f"{f['code']}({f['confidence']})" for f in rep["findings"] if f["critical"]) or "-"
+        # [~~] — расхождение с меткой ТЗ объясняется другими дефектами клипа (см. note)
+        mark = "OK" if got == ex["expected"] else "~~" if got == final else "XX"
+        print(f"[{mark}] {ex['id']:16} ТЗ {ex['expected']:3} итог {final:3} авто {got:3} | {found} | {ex['artifact']}")
+    print(f"\nАвто = метка ТЗ: {hit}/{total}; авто = итог с визуальной проверкой: {hit_final}/{total}. "
+          "Промахи на тексте/плёнке/переднем плане/пикселизации — визуальная часть проверки.")
 
 
 if __name__ == "__main__":

@@ -91,3 +91,13 @@ def test_artifacts(tmp_path, name, mod, dur, expect):
     else:
         assert got == set(), (got, rep["metrics"])
         assert rep["verdict"] == "OK_PENDING_VISUAL"
+
+
+def test_partial_bars_hint(tmp_path):
+    # полосы только на первой секунде-полутора (заставка) — подсказка low, вердикт не меняется
+    def intro_bars(fr, t):
+        return bars(fr, t) if t < 1.5 else fr
+    rep = analyze_video(make(tmp_path / "intro.mp4", 5.0, intro_bars))
+    part = [f for f in rep["findings"] if f["code"] == "borders_partial"]
+    assert part and part[0]["confidence"] == "low"
+    assert "borders" not in codes(rep)
