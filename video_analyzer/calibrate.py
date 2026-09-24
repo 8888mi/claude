@@ -9,7 +9,6 @@ import json
 import urllib.request
 from pathlib import Path
 
-from .analyzer import analyze_video
 
 EXAMPLES = json.loads((Path(__file__).with_name("tz_examples.json")).read_text())
 
@@ -28,9 +27,20 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="examples")
     ap.add_argument("--out", default="out/examples")
+    ap.add_argument("--download-only", action="store_true",
+                    help="только скачать примеры (без анализа и без OpenCV)")
     a = ap.parse_args()
     d = Path(a.dir)
     d.mkdir(parents=True, exist_ok=True)
+    if a.download_only:
+        for ex in EXAMPLES:
+            try:
+                print(f"[ok] {download(ex, d)}")
+            except Exception as e:  # noqa: BLE001
+                print(f"[--] {ex['id']}: {e}")
+        return
+    from .analyzer import analyze_video  # OpenCV нужен только для анализа
+
     hit = total = 0
     for ex in EXAMPLES:
         try:
